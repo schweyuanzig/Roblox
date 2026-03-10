@@ -194,4 +194,4 @@ local function showNotification(title, description, iconText)
 	end)
 end
 
-task.wait(0.5)
+return showNotification
