@@ -17,6 +17,15 @@ local CONFIG = {
 	CornerRadius = UDim.new(0, 6),
 }
 
+local function playDing()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://4590657391"
+    sound.Volume  = 0.5
+    sound.Parent  = workspace
+    sound:Play()
+    game:GetService("Debris"):AddItem(sound, 3)
+end
+
 local function createNotificationGui()
 	if playerGui:FindFirstChild("NotificationGui") then
 		playerGui.NotificationGui:Destroy()
@@ -128,6 +137,8 @@ local function showNotification(title, description, iconText)
 
 	titleLabel.Text = title or "BİLDİRİM"
 	descLabel.Text  = description or ""
+
+	playDing()
 
 	local tweenIn = TweenService:Create(frame, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Position = UDim2.new(
