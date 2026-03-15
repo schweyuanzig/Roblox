@@ -20,7 +20,7 @@ local CONFIG = {
 local function playDing()
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://4590657391"
-    sound.Volume  = 1.5
+    sound.Volume  = 3.5
     sound.Parent  = workspace
     sound:Play()
     game:GetService("Debris"):AddItem(sound, 3)
