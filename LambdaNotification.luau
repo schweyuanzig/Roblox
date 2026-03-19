@@ -99,24 +99,28 @@ local function normalizeSoundId(soundId)
 	return soundId
 end
 
+local function applyExtraArg(value, state)
+    if typeof(value) == "Color3" then
+        state.color = value
+    elseif isMode(value) then
+        state.mode = normalizeMode(value)
+    elseif value ~= nil then
+        state.soundId = value
+    end
+end
+
 local function resolveExtraArgs(arg4, arg5, arg6)
-	local mode = "Middle"
-	local soundId = nil
-	local color = nil
+    local state = {
+        mode = "Middle",
+        soundId = nil,
+        color = nil,
+    }
 
-	local values = {arg4, arg5, arg6}
+    applyExtraArg(arg4, state)
+    applyExtraArg(arg5, state)
+    applyExtraArg(arg6, state)
 
-	for _, value in ipairs(values) do
-		if typeof(value) == "Color3" then
-			color = value
-		elseif isMode(value) then
-			mode = normalizeMode(value)
-		elseif value ~= nil then
-			soundId = value
-		end
-	end
-
-	return mode, soundId, color
+    return state.mode, state.soundId, state.color
 end
 
 local function getModeData(mode)
