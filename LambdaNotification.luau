@@ -2,34 +2,107 @@
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local CONFIG = {
-	Position = UDim2.new(0.5, 0, 0.08, 0),
-	Size     = UDim2.new(0, 480, 0, 90),
-	BgColor  = Color3.fromRGB(140, 140, 140),
+	Size = UDim2.new(0, 480, 0, 90),
+
+	PositionMiddle = UDim2.new(0.5, 0, 0.08, 0),
+	PositionLeft   = UDim2.new(0.02, 0, 0.08, 0),
+	PositionRight  = UDim2.new(0.98, 0, 0.08, 0),
+
+	HiddenYScale = -0.15,
+
+	BgColor = Color3.fromRGB(140, 140, 140),
 	IconBgColor = Color3.fromRGB(160, 160, 160),
 	TextColor = Color3.fromRGB(255, 255, 255),
+
 	TweenTime = 0.35,
 	DisplayTime = 4,
+
 	CornerRadius = UDim.new(0, 6),
+
+	DefaultSoundId = "rbxassetid://4590657391",
+	SoundVolume = 3.5,
 }
 
-local function playDing()
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://4590657391"
-    sound.Volume  = 3.5
-    sound.Parent  = workspace
-    sound:Play()
-    game:GetService("Debris"):AddItem(sound, 3)
+local function normalizeMode(mode)
+	mode = tostring(mode or "Middle"):lower()
+
+	if mode == "left" then
+		return "Left"
+	elseif mode == "right" then
+		return "Right"
+	else
+		return "Middle"
+	end
 end
 
-local function createNotificationGui()
+local function getModeData(mode)
+	mode = normalizeMode(mode)
+
+	if mode == "Left" then
+		return {
+			Mode = "Left",
+			AnchorPoint = Vector2.new(0, 0),
+			ShowPosition = CONFIG.PositionLeft,
+			HidePosition = UDim2.new(CONFIG.PositionLeft.X.Scale, CONFIG.PositionLeft.X.Offset, CONFIG.HiddenYScale, 0),
+		}
+	elseif mode == "Right" then
+		return {
+			Mode = "Right",
+			AnchorPoint = Vector2.new(1, 0),
+			ShowPosition = CONFIG.PositionRight,
+			HidePosition = UDim2.new(CONFIG.PositionRight.X.Scale, CONFIG.PositionRight.X.Offset, CONFIG.HiddenYScale, 0),
+		}
+	else
+		return {
+			Mode = "Middle",
+			AnchorPoint = Vector2.new(0.5, 0),
+			ShowPosition = CONFIG.PositionMiddle,
+			HidePosition = UDim2.new(CONFIG.PositionMiddle.X.Scale, CONFIG.PositionMiddle.X.Offset, CONFIG.HiddenYScale, 0),
+		}
+	end
+end
+
+local function normalizeSoundId(soundId)
+	if soundId == nil or soundId == "" then
+		return CONFIG.DefaultSoundId
+	end
+
+	soundId = tostring(soundId)
+
+	if string.match(soundId, "^rbxassetid://") then
+		return soundId
+	end
+
+	if string.match(soundId, "^%d+$") then
+		return "rbxassetid://" .. soundId
+	end
+
+	return soundId
+end
+
+local function playDing(soundId)
+	local sound = Instance.new("Sound")
+	sound.SoundId = normalizeSoundId(soundId)
+	sound.Volume = CONFIG.SoundVolume
+	sound.Parent = SoundService
+	sound:Play()
+
+	Debris:AddItem(sound, 3)
+end
+
+local function createNotificationGui(mode)
 	if playerGui:FindFirstChild("NotificationGui") then
 		playerGui.NotificationGui:Destroy()
 	end
+
+	local modeData = getModeData(mode)
 
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "NotificationGui"
@@ -40,14 +113,10 @@ local function createNotificationGui()
 	local frame = Instance.new("Frame")
 	frame.Name = "NotifFrame"
 	frame.Size = CONFIG.Size
-	frame.Position = CONFIG.Position
-	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.AnchorPoint = modeData.AnchorPoint
+	frame.Position = modeData.HidePosition
 	frame.BackgroundColor3 = CONFIG.BgColor
 	frame.BorderSizePixel = 0
-	frame.Position = UDim2.new(
-		CONFIG.Position.X.Scale, CONFIG.Position.X.Offset,
-		-0.15, 0
-	)
 	frame.BackgroundTransparency = 1
 	frame.Parent = screenGui
 
@@ -126,46 +195,63 @@ local function createNotificationGui()
 	descLabel.TextTransparency = 1
 	descLabel.Parent = frame
 
-	return screenGui, frame, iconFrame, iconRightFill, circle, lambdaLabel, titleLabel, descLabel
+	return screenGui, frame, iconFrame, iconRightFill, circle, lambdaLabel, titleLabel, descLabel, modeData
 end
 
-local function showNotification(title, description, iconText)
-	local screenGui, frame, iconFrame, iconRightFill, circle, lambdaLabel, titleLabel, descLabel
-		= createNotificationGui()
+local function showNotification(title, description, iconText, mode, soundId)
+	local screenGui, frame, iconFrame, iconRightFill, circle, lambdaLabel, titleLabel, descLabel, modeData =
+		createNotificationGui(mode)
 
 	lambdaLabel.Text = iconText or "λ"
-
 	titleLabel.Text = title or "BİLDİRİM"
-	descLabel.Text  = description or ""
+	descLabel.Text = description or ""
 
-	playDing()
+	playDing(soundId)
 
-	local tweenIn = TweenService:Create(frame, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Position = UDim2.new(
-			CONFIG.Position.X.Scale, CONFIG.Position.X.Offset,
-			CONFIG.Position.Y.Scale, CONFIG.Position.Y.Offset
-		),
-		BackgroundTransparency = 0.3,
-	})
+	local tweenIn = TweenService:Create(
+		frame,
+		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{
+			Position = modeData.ShowPosition,
+			BackgroundTransparency = 0.3,
+		}
+	)
 
-	local iconTweenIn = TweenService:Create(iconFrame, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0,
-	})
-	local fillTweenIn = TweenService:Create(iconRightFill, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0,
-	})
-	local circleTweenIn = TweenService:Create(circle, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 0,
-	})
-	local lambdaTweenIn = TweenService:Create(lambdaLabel, TweenInfo.new(CONFIG.TweenTime), {
-		TextTransparency = 0,
-	})
-	local titleTweenIn = TweenService:Create(titleLabel, TweenInfo.new(CONFIG.TweenTime), {
-		TextTransparency = 0,
-	})
-	local descTweenIn = TweenService:Create(descLabel, TweenInfo.new(CONFIG.TweenTime), {
-		TextTransparency = 0,
-	})
+	local iconTweenIn = TweenService:Create(
+		iconFrame,
+		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = 0 }
+	)
+
+	local fillTweenIn = TweenService:Create(
+		iconRightFill,
+		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = 0 }
+	)
+
+	local circleTweenIn = TweenService:Create(
+		circle,
+		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ BackgroundTransparency = 0 }
+	)
+
+	local lambdaTweenIn = TweenService:Create(
+		lambdaLabel,
+		TweenInfo.new(CONFIG.TweenTime),
+		{ TextTransparency = 0 }
+	)
+
+	local titleTweenIn = TweenService:Create(
+		titleLabel,
+		TweenInfo.new(CONFIG.TweenTime),
+		{ TextTransparency = 0 }
+	)
+
+	local descTweenIn = TweenService:Create(
+		descLabel,
+		TweenInfo.new(CONFIG.TweenTime),
+		{ TextTransparency = 0 }
+	)
 
 	tweenIn:Play()
 	iconTweenIn:Play()
@@ -176,20 +262,38 @@ local function showNotification(title, description, iconText)
 	descTweenIn:Play()
 
 	task.delay(CONFIG.DisplayTime, function()
-		local tweenOut = TweenService:Create(frame, TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position = UDim2.new(
-				CONFIG.Position.X.Scale, CONFIG.Position.X.Offset,
-				-0.15, 0
-			),
-			BackgroundTransparency = 1,
+		local tweenOut = TweenService:Create(
+			frame,
+			TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{
+				Position = modeData.HidePosition,
+				BackgroundTransparency = 1,
+			}
+		)
+
+		local iconTweenOut = TweenService:Create(iconFrame, TweenInfo.new(CONFIG.TweenTime), {
+			BackgroundTransparency = 1
 		})
 
-		local iconTweenOut    = TweenService:Create(iconFrame,    TweenInfo.new(CONFIG.TweenTime), { BackgroundTransparency = 1 })
-		local fillTweenOut    = TweenService:Create(iconRightFill,TweenInfo.new(CONFIG.TweenTime), { BackgroundTransparency = 1 })
-		local circleTweenOut  = TweenService:Create(circle,       TweenInfo.new(CONFIG.TweenTime), { BackgroundTransparency = 1 })
-		local lambdaTweenOut  = TweenService:Create(lambdaLabel,  TweenInfo.new(CONFIG.TweenTime), { TextTransparency = 1 })
-		local titleTweenOut   = TweenService:Create(titleLabel,   TweenInfo.new(CONFIG.TweenTime), { TextTransparency = 1 })
-		local descTweenOut    = TweenService:Create(descLabel,    TweenInfo.new(CONFIG.TweenTime), { TextTransparency = 1 })
+		local fillTweenOut = TweenService:Create(iconRightFill, TweenInfo.new(CONFIG.TweenTime), {
+			BackgroundTransparency = 1
+		})
+
+		local circleTweenOut = TweenService:Create(circle, TweenInfo.new(CONFIG.TweenTime), {
+			BackgroundTransparency = 1
+		})
+
+		local lambdaTweenOut = TweenService:Create(lambdaLabel, TweenInfo.new(CONFIG.TweenTime), {
+			TextTransparency = 1
+		})
+
+		local titleTweenOut = TweenService:Create(titleLabel, TweenInfo.new(CONFIG.TweenTime), {
+			TextTransparency = 1
+		})
+
+		local descTweenOut = TweenService:Create(descLabel, TweenInfo.new(CONFIG.TweenTime), {
+			TextTransparency = 1
+		})
 
 		tweenOut:Play()
 		iconTweenOut:Play()
@@ -200,7 +304,9 @@ local function showNotification(title, description, iconText)
 		descTweenOut:Play()
 
 		tweenOut.Completed:Connect(function()
-			if screenGui then screenGui:Destroy() end
+			if screenGui then
+				screenGui:Destroy()
+			end
 		end)
 	end)
 end
