@@ -50,14 +50,14 @@ local function getModeData(mode)
 			Mode = "Left",
 			AnchorPoint = Vector2.new(0, 0),
 			ShowPosition = CONFIG.PositionLeft,
-			HidePosition = UDim2.new(CONFIG.PositionLeft.X.Scale, CONFIG.PositionLeft.X.Offset, CONFIG.HiddenYScale, 0),
+			HidePosition = UDim2.new(0, -(CONFIG.Size.X.Offset + 30), CONFIG.PositionLeft.Y.Scale, CONFIG.PositionLeft.Y.Offset),
 		}
 	elseif mode == "Right" then
 		return {
 			Mode = "Right",
 			AnchorPoint = Vector2.new(1, 0),
 			ShowPosition = CONFIG.PositionRight,
-			HidePosition = UDim2.new(CONFIG.PositionRight.X.Scale, CONFIG.PositionRight.X.Offset, CONFIG.HiddenYScale, 0),
+			HidePosition = UDim2.new(1, CONFIG.Size.X.Offset + 30, CONFIG.PositionRight.Y.Scale, CONFIG.PositionRight.Y.Offset),
 		}
 	else
 		return {
