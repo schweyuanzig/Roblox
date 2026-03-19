@@ -1,9 +1,10 @@
--- LAMBDA NOTIFICATION SCRIPT
+-- LAMBDA NOTIFICATION MODULE
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -12,8 +13,8 @@ local CONFIG = {
 	Size = UDim2.new(0, 480, 0, 90),
 
 	PositionMiddle = UDim2.new(0.5, 0, 0.08, 0),
-	PositionLeft   = UDim2.new(0.02, 0, 0.08, 0),
-	PositionRight  = UDim2.new(0.98, 0, 0.08, 0),
+	PositionLeft = UDim2.new(0.02, 0, 0.08, 0),
+	PositionRight = UDim2.new(0.98, 0, 0.08, 0),
 
 	BgColor = Color3.fromRGB(140, 140, 140),
 	IconBgColor = Color3.fromRGB(160, 160, 160),
@@ -28,6 +29,36 @@ local CONFIG = {
 
 	OffscreenPadding = 30,
 }
+
+local soundCache = {}
+
+local function clamp(value, minValue, maxValue)
+	return math.max(minValue, math.min(maxValue, value))
+end
+
+local function shiftColor(color, amount)
+	local r = clamp(math.floor(color.R * 255 + amount), 0, 255)
+	local g = clamp(math.floor(color.G * 255 + amount), 0, 255)
+	local b = clamp(math.floor(color.B * 255 + amount), 0, 255)
+
+	return Color3.fromRGB(r, g, b)
+end
+
+local function resolveTheme(themeColor)
+	if typeof(themeColor) == "Color3" then
+		return {
+			BgColor = shiftColor(themeColor, -15),
+			IconBgColor = shiftColor(themeColor, 15),
+			TextColor = Color3.fromRGB(255, 255, 255),
+		}
+	end
+
+	return {
+		BgColor = CONFIG.BgColor,
+		IconBgColor = CONFIG.IconBgColor,
+		TextColor = CONFIG.TextColor,
+	}
+end
 
 local function isMode(value)
 	if value == nil then
@@ -68,21 +99,24 @@ local function normalizeSoundId(soundId)
 	return soundId
 end
 
-local function resolveModeAndSound(arg4, arg5)
+local function resolveExtraArgs(arg4, arg5, arg6)
 	local mode = "Middle"
 	local soundId = nil
+	local color = nil
 
-	if isMode(arg4) then
-		mode = arg4
-		soundId = arg5
-	else
-		soundId = arg4
-		if isMode(arg5) then
-			mode = arg5
+	local values = {arg4, arg5, arg6}
+
+	for _, value in ipairs(values) do
+		if typeof(value) == "Color3" then
+			color = value
+		elseif isMode(value) then
+			mode = normalizeMode(value)
+		elseif value ~= nil then
+			soundId = value
 		end
 	end
 
-	return normalizeMode(mode), soundId
+	return mode, soundId, color
 end
 
 local function getModeData(mode)
@@ -127,22 +161,55 @@ local function getModeData(mode)
 	end
 end
 
+local function getSoundTemplate(soundId)
+	local finalId = normalizeSoundId(soundId)
+
+	if soundCache[finalId] and soundCache[finalId].Parent then
+		return soundCache[finalId]
+	end
+
+	local template = Instance.new("Sound")
+	template.Name = "LambdaNotificationSoundTemplate"
+	template.SoundId = finalId
+	template.Volume = CONFIG.SoundVolume
+	template.Parent = SoundService
+
+	pcall(function()
+		ContentProvider:PreloadAsync({template})
+	end)
+
+	soundCache[finalId] = template
+	return template
+end
+
+local function preloadSound(soundId)
+	getSoundTemplate(soundId)
+end
+
 local function playDing(soundId)
-	local sound = Instance.new("Sound")
-	sound.SoundId = normalizeSoundId(soundId)
+	local template = getSoundTemplate(soundId)
+
+	local sound = template:Clone()
+	sound.TimePosition = 0
 	sound.Volume = CONFIG.SoundVolume
 	sound.Parent = SoundService
 	sound:Play()
 
-	Debris:AddItem(sound, 3)
+	local lifeTime = 5
+	if template.TimeLength and template.TimeLength > 0 then
+		lifeTime = math.max(template.TimeLength + 0.5, 3)
+	end
+
+	Debris:AddItem(sound, lifeTime)
 end
 
-local function createNotificationGui(mode)
+local function createNotificationGui(mode, themeColor)
 	if playerGui:FindFirstChild("NotificationGui") then
 		playerGui.NotificationGui:Destroy()
 	end
 
 	local modeData = getModeData(mode)
+	local theme = resolveTheme(themeColor)
 
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "NotificationGui"
@@ -155,7 +222,7 @@ local function createNotificationGui(mode)
 	frame.Size = CONFIG.Size
 	frame.AnchorPoint = modeData.AnchorPoint
 	frame.Position = modeData.HidePosition
-	frame.BackgroundColor3 = CONFIG.BgColor
+	frame.BackgroundColor3 = theme.BgColor
 	frame.BorderSizePixel = 0
 	frame.BackgroundTransparency = 1
 	frame.Parent = screenGui
@@ -167,7 +234,7 @@ local function createNotificationGui(mode)
 	local iconFrame = Instance.new("Frame")
 	iconFrame.Name = "IconFrame"
 	iconFrame.Size = UDim2.new(0, 90, 1, 0)
-	iconFrame.BackgroundColor3 = CONFIG.IconBgColor
+	iconFrame.BackgroundColor3 = theme.IconBgColor
 	iconFrame.BorderSizePixel = 0
 	iconFrame.BackgroundTransparency = 1
 	iconFrame.Parent = frame
@@ -179,7 +246,7 @@ local function createNotificationGui(mode)
 	local innerFill = Instance.new("Frame")
 	innerFill.Name = "InnerFill"
 	innerFill.Size = UDim2.new(0, 10, 1, 0)
-	innerFill.BackgroundColor3 = CONFIG.IconBgColor
+	innerFill.BackgroundColor3 = theme.IconBgColor
 	innerFill.BorderSizePixel = 0
 	innerFill.BackgroundTransparency = 1
 	innerFill.Parent = iconFrame
@@ -202,7 +269,7 @@ local function createNotificationGui(mode)
 	lambdaLabel.Size = UDim2.new(1, 0, 1, 0)
 	lambdaLabel.BackgroundTransparency = 1
 	lambdaLabel.Text = "λ"
-	lambdaLabel.TextColor3 = CONFIG.IconBgColor
+	lambdaLabel.TextColor3 = theme.IconBgColor
 	lambdaLabel.TextScaled = true
 	lambdaLabel.Font = Enum.Font.GothamBold
 	lambdaLabel.TextTransparency = 1
@@ -211,8 +278,10 @@ local function createNotificationGui(mode)
 	local titleLabel = Instance.new("TextLabel")
 	titleLabel.Name = "TitleLabel"
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "TITLE KISMI"
-	titleLabel.TextColor3 = CONFIG.TextColor
+	titleLabel.Text = "TITLE"
+	titleLabel.TextColor3 = theme.TextColor
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.TextYAlignment = Enum.TextYAlignment.Center
 	titleLabel.Font = Enum.Font.GothamBold
 	titleLabel.TextSize = 28
 	titleLabel.TextTransparency = 1
@@ -221,51 +290,47 @@ local function createNotificationGui(mode)
 	local descLabel = Instance.new("TextLabel")
 	descLabel.Name = "DescLabel"
 	descLabel.BackgroundTransparency = 1
-	descLabel.Text = "AÇIKLAMA"
-	descLabel.TextColor3 = CONFIG.TextColor
+	descLabel.Text = "DESCRIPTION"
+	descLabel.TextColor3 = theme.TextColor
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.TextYAlignment = Enum.TextYAlignment.Center
 	descLabel.Font = Enum.Font.Gotham
 	descLabel.TextSize = 16
 	descLabel.TextTransparency = 1
 	descLabel.Parent = frame
 
 	if modeData.Mode == "Left" then
-		-- Icon sağda, yazılar solda
 		iconFrame.Position = UDim2.new(1, -90, 0, 0)
 		innerFill.Position = UDim2.new(0, 0, 0, 0)
 
 		titleLabel.Size = UDim2.new(1, -120, 0, 50)
 		titleLabel.Position = UDim2.new(0, 15, 0, 10)
-		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 		descLabel.Size = UDim2.new(1, -120, 0, 30)
 		descLabel.Position = UDim2.new(0, 15, 0, 52)
-		descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	else
-		-- Normal görünüm
 		iconFrame.Position = UDim2.new(0, 0, 0, 0)
 		innerFill.Position = UDim2.new(1, -10, 0, 0)
 
 		titleLabel.Size = UDim2.new(1, -110, 0, 50)
 		titleLabel.Position = UDim2.new(0, 100, 0, 10)
-		titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 		descLabel.Size = UDim2.new(1, -110, 0, 30)
 		descLabel.Position = UDim2.new(0, 100, 0, 52)
-		descLabel.TextXAlignment = Enum.TextXAlignment.Left
 	end
 
 	return screenGui, frame, iconFrame, innerFill, circle, lambdaLabel, titleLabel, descLabel, modeData
 end
 
-local function showNotification(title, description, iconText, arg4, arg5)
-	local mode, soundId = resolveModeAndSound(arg4, arg5)
+local function showNotification(title, description, iconText, arg4, arg5, arg6)
+	local mode, soundId, color = resolveExtraArgs(arg4, arg5, arg6)
 
 	local screenGui, frame, iconFrame, innerFill, circle, lambdaLabel, titleLabel, descLabel, modeData =
-		createNotificationGui(mode)
+		createNotificationGui(mode, color)
 
 	lambdaLabel.Text = iconText or "λ"
-	titleLabel.Text = title or "BİLDİRİM"
-	descLabel.Text = description or ""
+	titleLabel.Text = title or "Lambda Title"
+	descLabel.Text = description or "Hello!"
 
 	playDing(soundId)
 
@@ -281,37 +346,37 @@ local function showNotification(title, description, iconText, arg4, arg5)
 	local iconTweenIn = TweenService:Create(
 		iconFrame,
 		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = 0 }
+		{BackgroundTransparency = 0}
 	)
 
 	local fillTweenIn = TweenService:Create(
 		innerFill,
 		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = 0 }
+		{BackgroundTransparency = 0}
 	)
 
 	local circleTweenIn = TweenService:Create(
 		circle,
 		TweenInfo.new(CONFIG.TweenTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = 0 }
+		{BackgroundTransparency = 0}
 	)
 
 	local lambdaTweenIn = TweenService:Create(
 		lambdaLabel,
 		TweenInfo.new(CONFIG.TweenTime),
-		{ TextTransparency = 0 }
+		{TextTransparency = 0}
 	)
 
 	local titleTweenIn = TweenService:Create(
 		titleLabel,
 		TweenInfo.new(CONFIG.TweenTime),
-		{ TextTransparency = 0 }
+		{TextTransparency = 0}
 	)
 
 	local descTweenIn = TweenService:Create(
 		descLabel,
 		TweenInfo.new(CONFIG.TweenTime),
-		{ TextTransparency = 0 }
+		{TextTransparency = 0}
 	)
 
 	tweenIn:Play()
@@ -371,5 +436,12 @@ local function showNotification(title, description, iconText, arg4, arg5)
 		end)
 	end)
 end
+
+task.spawn(function()
+	preloadSound(CONFIG.DefaultSoundId)
+	
+	-- preloadSound("3023237993")
+	-- preloadSound("9119802009")
+end)
 
 return showNotification
