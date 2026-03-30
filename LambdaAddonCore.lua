@@ -18,13 +18,11 @@ function AddonSystem:ScanAddonsFolder()
         end)
         
         if success and content then
-            if content:find("local Addons%s*=") or content:find("Addons%s*=") then
-                detectedAddons[filename] = {
-                    name = filename,
-                    content = content,
-                    loaded = false
-                }
-            end
+            detectedAddons[filename] = {
+                name = filename,
+                content = content,
+                loaded = false
+            }
         end
     end
     
@@ -33,46 +31,25 @@ end
 
 function AddonSystem:CreateAddonsTab(Window, detectedAddons)
     local AddonsTab = Window:AddTab('Addons')
-    local AddonsSection = AddonsTab:AddLeftGroupbox('Activated Addons')
     
     if not detectedAddons or table.getn(detectedAddons) == 0 then
-        AddonsSection:AddLabel('No addon found.')
-        return AddonsTab, AddonsSection
+        local EmptySection = AddonsTab:AddLeftGroupbox('Activated Addons')
+        EmptySection:AddLabel('No addon found.')
+        return AddonsTab
     end
     
     for filename, addonData in pairs(detectedAddons) do
-        local addonMetadata = self:ExtractAddonMetadata(addonData.content)
+        local addonGroupbox = AddonsTab:AddLeftGroupbox(filename)
         
-        if addonMetadata then
-            AddonsSection:AddLabel(
-                string.format("%s (v%s) [%s]", 
-                    addonMetadata.name or filename,
-                    addonMetadata.version or "1.0",
-                    addonMetadata.id or "unknown"
-                )
-            )
-            
-            self.AddonRegistry[addonMetadata.id or filename] = addonMetadata
+        local loadedAddon = self:LoadAddonDynamically(filename, addonData.content)
+        
+        if loadedAddon then
+            local features = self:ExtractAddonFeatures(loadedAddon)
+            self:CreateDynamicUIElements(addonGroupbox, filename, features)
         end
     end
     
-    return AddonsTab, AddonsSection
-end
-
-function AddonSystem:ExtractAddonMetadata(content)
-    local metadata = {}
-    
-    local nameMatch = content:match("Addons%.name%s*=%s*['\"]([^'\"]+)['\"]")
-    local versionMatch = content:match("Addons%.version%s*=%s*['\"]([^'\"]+)['\"]")
-    local idMatch = content:match("Addons%.id%s*=%s*['\"]([^'\"]+)['\"]")
-    local boxMatch = content:match("Addons%.box%s*=%s*['\"]([^'\"]+)['\"]")
-    
-    metadata.name = nameMatch or "Unknown Addon"
-    metadata.version = versionMatch or "1.0"
-    metadata.id = idMatch or "addon_unknown"
-    metadata.box = boxMatch or "left"
-    
-    return metadata
+    return AddonsTab
 end
 
 function AddonSystem:LoadAddonDynamically(addonId, content)
@@ -81,7 +58,6 @@ function AddonSystem:LoadAddonDynamically(addonId, content)
     end)
     
     if not success then
-        print("[ADDON ERROR] Could not load addon:", addonId)
         return nil
     end
     
@@ -117,7 +93,7 @@ function AddonSystem:ExtractAddonFeatures(loadedAddon)
     return features
 end
 
-function AddonSystem:CreateDynamicUIElements(groupbox, addonId, features, metadata)
+function AddonSystem:CreateDynamicUIElements(groupbox, addonId, features)
     for buttonName, buttonData in pairs(features.buttons) do
         groupbox:AddButton({
             Text = buttonData.Text or buttonName,
@@ -164,27 +140,7 @@ end
 
 function AddonSystem:Initialize(Window)
     local detectedAddons = self:ScanAddonsFolder()
-    local AddonsTab, AddonsSection = self:CreateAddonsTab(Window, detectedAddons)
-    
-    for addonId, addonMetadata in pairs(self.AddonRegistry) do
-        local addonGroupbox
-        
-        if addonMetadata.box == "right" then
-            addonGroupbox = AddonsTab:AddRightGroupbox(addonMetadata.name)
-        else
-            addonGroupbox = AddonsTab:AddLeftGroupbox(addonMetadata.name)
-        end
-        
-        local addonData = detectedAddons[addonId]
-        if addonData then
-            local loadedAddon = self:LoadAddonDynamically(addonId, addonData.content)
-            
-            if loadedAddon then
-                local features = self:ExtractAddonFeatures(loadedAddon)
-                self:CreateDynamicUIElements(addonGroupbox, addonId, features, addonMetadata)
-            end
-        end
-    end
+    local AddonsTab = self:CreateAddonsTab(Window, detectedAddons)
     
     return AddonsTab
 end
