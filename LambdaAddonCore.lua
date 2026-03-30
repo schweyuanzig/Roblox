@@ -1,28 +1,29 @@
 local AddonSystem = {
     LoadedAddons = {},
-    AddonRegistry = {},
 }
 
 function AddonSystem:ScanAddonsFolder()
-    local repo = 'https://raw.githubusercontent.com/schweyuanzig/LinoriaLib/main/'
     local detectedAddons = {}
     
-    local addonFiles = {
-        "ThemeManager.lua",
-        "SaveManager.lua",
-    }
+    local addonFolder = game:GetService("ServerStorage"):FindFirstChild("Addons")
     
-    for _, filename in ipairs(addonFiles) do
-        local success, content = pcall(function()
-            return game:HttpGet(repo .. "addons/" .. filename)
-        end)
-        
-        if success and content then
-            detectedAddons[filename] = {
-                name = filename,
-                content = content,
-                loaded = false
-            }
+    if not addonFolder then
+        return detectedAddons
+    end
+    
+    for _, file in ipairs(addonFolder:GetChildren()) do
+        if file:IsA("ModuleScript") then
+            local success, loadedModule = pcall(function()
+                return require(file)
+            end)
+            
+            if success and loadedModule then
+                detectedAddons[file.Name] = {
+                    name = file.Name,
+                    module = loadedModule,
+                    loaded = false
+                }
+            end
         end
     end
     
@@ -41,7 +42,7 @@ function AddonSystem:CreateAddonsTab(Window, detectedAddons)
     for filename, addonData in pairs(detectedAddons) do
         local addonGroupbox = AddonsTab:AddLeftGroupbox(filename)
         
-        local loadedAddon = self:LoadAddonDynamically(filename, addonData.content)
+        local loadedAddon = addonData.module
         
         if loadedAddon then
             local features = self:ExtractAddonFeatures(loadedAddon)
@@ -50,19 +51,6 @@ function AddonSystem:CreateAddonsTab(Window, detectedAddons)
     end
     
     return AddonsTab
-end
-
-function AddonSystem:LoadAddonDynamically(addonId, content)
-    local success, loadedModule = pcall(function()
-        return loadstring(content)()
-    end)
-    
-    if not success then
-        return nil
-    end
-    
-    self.LoadedAddons[addonId] = loadedModule
-    return loadedModule
 end
 
 function AddonSystem:ExtractAddonFeatures(loadedAddon)
